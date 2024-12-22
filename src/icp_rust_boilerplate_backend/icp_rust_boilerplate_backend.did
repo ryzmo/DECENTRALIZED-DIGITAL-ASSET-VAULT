@@ -1,0 +1,11 @@
+type AccessLog = record {
+    user_id: text;
+    timestamp: nat64;
+};
+
+service : {
+    add_asset: (text, text, vec nat8) -> (nat64);
+    share_asset: (nat64, text, text) -> (variant { Ok: text; Err: text });
+    get_asset: (nat64, text) -> (variant { Ok: record { text; vec nat8 }; Err: text });
+    get_access_log: (nat64, text) -> (variant { Ok: vec AccessLog; Err: text });
+}
