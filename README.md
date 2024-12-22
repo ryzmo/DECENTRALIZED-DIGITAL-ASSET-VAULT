@@ -82,7 +82,7 @@ Kloning proyek ini ke komputer Anda:
 
 ```bash
 git clone https://github.com/ryzmo/DECENTRALIZED-DIGITAL-ASSET-VAULT
-cd icp-101-rust-boilerplate
+cd DECENTRALIZED-DIGITAL-ASSET-VAULT
 ```
 
 ### 3. **Konfigurasi Proyek**
@@ -90,7 +90,7 @@ cd icp-101-rust-boilerplate
 Pastikan file `dfx.json` dan `Cargo.toml` sudah terkonfigurasi dengan benar. Struktur direktori proyek adalah sebagai berikut:
 
 ```
-icp-101-rust-boilerplate/
+DECENTRALIZED-DIGITAL-ASSET-VAULT/
 ├── dfx.json
 ├── Cargo.toml
 ├── src/
