@@ -1,5 +1,4 @@
 use candid::{CandidType, Deserialize};
-use ic_cdk_macros::{init, query, update};
 use std::collections::HashMap;
 
 // Tipe untuk Asset ID dan User ID
@@ -29,20 +28,40 @@ thread_local! {
 }
 
 // Fungsi inisialisasi
-#[init]
+#[ic_cdk::init]
 fn init() {
     ic_cdk::println!("Decentralized Digital Asset Vault initialized!");
 }
 
-// Tambahkan aset baru
-#[update]
-fn add_asset(owner: UserId, name: String, content: Vec<u8>) -> AssetId {
-    let asset_id = NEXT_ASSET_ID.with(|id| {
+// Fungsi utilitas untuk validasi input
+fn validate_fields(fields: Vec<(&str, &str)>) -> Result<(), String> {
+    for (field_name, field_value) in fields {
+        if field_value.trim().is_empty() {
+            return Err(format!("Field '{}' cannot be empty.", field_name));
+        }
+    }
+    Ok(())
+}
+
+// Fungsi utilitas untuk ID aset unik
+fn generate_asset_id() -> AssetId {
+    NEXT_ASSET_ID.with(|id| {
         let mut id = id.borrow_mut();
         let current_id = *id;
         *id += 1;
         current_id
-    });
+    })
+}
+
+// Tambahkan aset baru
+#[ic_cdk::update]
+fn add_asset(owner: UserId, name: String, content: Vec<u8>) -> Result<AssetId, String> {
+    validate_fields(vec![("owner", &owner), ("name", &name)])?;
+    if content.is_empty() {
+        return Err("Content cannot be empty.".to_string());
+    }
+
+    let asset_id = generate_asset_id();
 
     let asset = DigitalAsset {
         id: asset_id,
@@ -58,12 +77,17 @@ fn add_asset(owner: UserId, name: String, content: Vec<u8>) -> AssetId {
     });
 
     ic_cdk::println!("Asset added by user: {}", owner);
-    asset_id
+    Ok(asset_id)
 }
 
 // Berikan akses ke pengguna lain
-#[update]
+#[ic_cdk::update]
 fn share_asset(asset_id: AssetId, owner: UserId, recipient: UserId) -> Result<String, String> {
+    validate_fields(vec![("owner", &owner), ("recipient", &recipient)])?;
+    if owner == recipient {
+        return Err("Owner cannot share the asset with themselves.".to_string());
+    }
+
     ASSETS.with(|assets| {
         let mut assets = assets.borrow_mut();
         if let Some(asset) = assets.get_mut(&asset_id) {
@@ -82,7 +106,7 @@ fn share_asset(asset_id: AssetId, owner: UserId, recipient: UserId) -> Result<St
 }
 
 // Lihat detail aset
-#[query]
+#[ic_cdk::query]
 fn get_asset(asset_id: AssetId, user_id: UserId) -> Result<(String, Vec<u8>), String> {
     let result = ASSETS.with(|assets| {
         let assets = assets.borrow();
@@ -97,7 +121,6 @@ fn get_asset(asset_id: AssetId, user_id: UserId) -> Result<(String, Vec<u8>), St
         }
     });
 
-    // Tambahkan log akses di luar peminjaman
     if let Ok(_) = result {
         ASSETS.with(|assets| {
             let mut assets = assets.borrow_mut();
@@ -114,7 +137,7 @@ fn get_asset(asset_id: AssetId, user_id: UserId) -> Result<(String, Vec<u8>), St
 }
 
 // Lihat riwayat akses aset
-#[query]
+#[ic_cdk::query]
 fn get_access_log(asset_id: AssetId, owner: UserId) -> Result<Vec<AccessLog>, String> {
     ASSETS.with(|assets| {
         let assets = assets.borrow();
@@ -129,3 +152,81 @@ fn get_access_log(asset_id: AssetId, owner: UserId) -> Result<Vec<AccessLog>, St
         }
     })
 }
+
+// Fungsi tambahan: Hapus aset
+#[ic_cdk::update]
+fn delete_asset(asset_id: AssetId, owner: UserId) -> Result<String, String> {
+    ASSETS.with(|assets| {
+        let mut assets = assets.borrow_mut();
+        if let Some(asset) = assets.get(&asset_id) {
+            if asset.owner == owner {
+                assets.remove(&asset_id);
+                Ok("Asset deleted successfully.".to_string())
+            } else {
+                Err("Only the owner can delete the asset.".to_string())
+            }
+        } else {
+            Err("Asset not found.".to_string())
+        }
+    })
+}
+
+// Fungsi tambahan: Cabut akses pengguna
+#[ic_cdk::update]
+fn revoke_access(asset_id: AssetId, owner: UserId, recipient: UserId) -> Result<String, String> {
+    ASSETS.with(|assets| {
+        let mut assets = assets.borrow_mut();
+        if let Some(asset) = assets.get_mut(&asset_id) {
+            if asset.owner == owner {
+                if asset.shared_with.contains(&recipient) {
+                    asset.shared_with.retain(|user| user != &recipient);
+                    Ok(format!("Access revoked for user: {}", recipient))
+                } else {
+                    Err("User does not have access to this asset.".to_string())
+                }
+            } else {
+                Err("Only the owner can revoke access.".to_string())
+            }
+        } else {
+            Err("Asset not found.".to_string())
+        }
+    })
+}
+
+// Fungsi tambahan: Daftar semua aset milik pengguna
+#[ic_cdk::query]
+fn list_assets_by_owner(owner: UserId) -> Result<Vec<DigitalAsset>, String> {
+    ASSETS.with(|assets| {
+        let assets = assets.borrow();
+        let user_assets: Vec<DigitalAsset> = assets.values()
+            .filter(|asset| asset.owner == owner)
+            .cloned()
+            .collect();
+
+        if user_assets.is_empty() {
+            Err("No assets found for this owner.".to_string())
+        } else {
+            Ok(user_assets)
+        }
+    })
+}
+
+// Fungsi tambahan: Daftar semua aset yang dibagikan dengan pengguna
+#[ic_cdk::query]
+fn get_shared_assets(user_id: UserId) -> Result<Vec<DigitalAsset>, String> {
+    ASSETS.with(|assets| {
+        let assets = assets.borrow();
+        let shared_assets: Vec<DigitalAsset> = assets.values()
+            .filter(|asset| asset.shared_with.contains(&user_id))
+            .cloned()
+            .collect();
+
+        if shared_assets.is_empty() {
+            Err("No shared assets found for this user.".to_string())
+        } else {
+            Ok(shared_assets)
+        }
+    })
+}
+
+ic_cdk::export_candid!();

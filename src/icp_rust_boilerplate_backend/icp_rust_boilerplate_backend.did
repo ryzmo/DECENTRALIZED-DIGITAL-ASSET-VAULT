@@ -1,11 +1,24 @@
-type AccessLog = record {
-    user_id: text;
-    timestamp: nat64;
+type AccessLog = record { user_id : text; timestamp : nat64 };
+type DigitalAsset = record {
+  id : nat64;
+  content : vec nat8;
+  owner : text;
+  name : text;
+  access_log : vec AccessLog;
+  shared_with : vec text;
 };
-
-service : {
-    add_asset: (text, text, vec nat8) -> (nat64);
-    share_asset: (nat64, text, text) -> (variant { Ok: text; Err: text });
-    get_asset: (nat64, text) -> (variant { Ok: record { text; vec nat8 }; Err: text });
-    get_access_log: (nat64, text) -> (variant { Ok: vec AccessLog; Err: text });
+type Result = variant { Ok : nat64; Err : text };
+type Result_1 = variant { Ok : text; Err : text };
+type Result_2 = variant { Ok : vec AccessLog; Err : text };
+type Result_3 = variant { Ok : record { text; vec nat8 }; Err : text };
+type Result_4 = variant { Ok : vec DigitalAsset; Err : text };
+service : () -> {
+  add_asset : (text, text, vec nat8) -> (Result);
+  delete_asset : (nat64, text) -> (Result_1);
+  get_access_log : (nat64, text) -> (Result_2) query;
+  get_asset : (nat64, text) -> (Result_3) query;
+  get_shared_assets : (text) -> (Result_4) query;
+  list_assets_by_owner : (text) -> (Result_4) query;
+  revoke_access : (nat64, text, text) -> (Result_1);
+  share_asset : (nat64, text, text) -> (Result_1);
 }
